@@ -30,7 +30,7 @@ def get_today_commits(username: str) -> list[dict]:
 
     if not isinstance(events, list):
         return []
-    
+
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")  # 用 UTC 时间
     commits = []
 
@@ -44,13 +44,44 @@ def get_today_commits(username: str) -> list[dict]:
         if created_at != today:
             continue
 
-        # 提取 commits 信息（有些 PushEvent 可能没有 commits）
         repo = event["repo"]["name"]
-        for commit in event["payload"].get("commits", []):
-            commits.append({
-                "repo": repo,
-                "message": commit["message"],
-                "sha": commit["sha"],
-            })
+        payload = event["payload"]
+
+        # 直接从 payload 提取 commits
+        if payload.get("commits"):
+            for commit in payload["commits"]:
+                commits.append({
+                    "repo": repo,
+                    "message": commit["message"],
+                    "sha": commit["sha"],
+                })
+        else:
+            # 如果 payload 中没有 commits，用 compare API 获取
+            before = payload.get("before")
+            head = payload.get("head")
+            if before and head:
+                compare_commits = _get_compare_commits(headers, repo, before, head)
+                commits.extend(compare_commits)
+
+    return commits
+
+
+def _get_compare_commits(headers: dict, repo: str, before: str, head: str) -> list[dict]:
+    """通过 compare API 获取两个 commit 之间的差异"""
+    url = f"{GITHUB_API}/repos/{repo}/compare/{before}...{head}"
+    response = httpx.get(url, headers=headers)
+
+    if response.status_code != 200:
+        return []
+
+    data = response.json()
+    commits = []
+
+    for c in data.get("commits", []):
+        commits.append({
+            "repo": repo,
+            "message": c["commit"]["message"].strip(),
+            "sha": c["sha"][:7],
+        })
 
     return commits

@@ -19,11 +19,21 @@ def main():
         print("错误: 请在 .env 文件中设置 ANTHROPIC_API_KEY")
         sys.exit(1)
 
-    if len(sys.argv) < 2:
-        print("Usage: python main.py <github_username>")
-        sys.exit(1)
+    # 解析参数
+    username = None
+    provider = "mimo"  # 默认使用 mimo
 
-    username = sys.argv[1]
+    for arg in sys.argv[1:]:
+        if arg in ("--mimo", "--claude"):
+            provider = arg[2:]  
+        elif not arg.startswith("--"):
+            username = arg
+
+    if not username:
+        print("用法: python main.py <github_username> [--mimo|--claude]")
+        print("  --mimo   使用 Mimo API (默认)")
+        print("  --claude 使用 Claude API")
+        sys.exit(1)
 
     try:
         # 获取今日 commits
@@ -37,10 +47,10 @@ def main():
         print("今日没有 commits 记录")
         return
 
-    print(f"获取到 {len(commits)} 条 commits，正在调用 Claude 生成日报...")
+    print(f"获取到 {len(commits)} 条 commits, 正在调用 {provider.upper()} 生成日报...")
 
     try:
-        report = generate_report(commits)
+        report = generate_report(commits, provider=provider)
     except Exception as e:
         print(f"生成日报失败: {e}")
         sys.exit(1)
